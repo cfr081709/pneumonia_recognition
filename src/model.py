@@ -1,5 +1,4 @@
-import torch
-from torch  import nn
+from torch import nn
 from torchvision.models import densenet201, DenseNet201_Weights
 
 def get_model(num_classes = 2, pretrained=True):

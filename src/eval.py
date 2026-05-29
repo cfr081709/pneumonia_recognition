@@ -1,76 +1,181 @@
-import os
 import torch
+import platform
 from torch import nn
-from PIL import Image
-from torchvision import transforms
+import pandas as pd
+import matplotlib.pyplot as plt
+from torch.utils.data import DataLoader
+from torchvision import transforms, datasets
 from torchvision.models import densenet201
+from sklearn.metrics import confusion_matrix, precision_score, accuracy_score, roc_curve, auc, recall_score, f1_score
 
-device = torch.device("mps" if torch.backends.mps.is_available() else "cpu")
+def evaluate(save_file_path, model_path, data_dir, plot=False):
 
-filenameP = "/Users/christianrafferty/Documents/pneumonia_recognition/data/val/PNEUMONIA"
-filenameN = "/Users/christianrafferty/Documents/pneumonia_recognition/data/val/NORMAL"
+    results = []
 
-model = densenet201(weights=None)
-model.classifier = nn.Linear(1920, 2)
+    transform = transforms.Compose([
+        transforms.Resize((224, 224)),
+        transforms.Grayscale(num_output_channels=3),
+        transforms.ToTensor(),
+        transforms.Normalize(
+            mean=[0.485, 0.456, 0.406],
+            std=[0.229, 0.224, 0.225]
+        ),
+    ])
 
-model.load_state_dict(torch.load(
-    "/Users/christianrafferty/Documents/pneumonia_recognition/src/model.pth",
-    map_location=device
-))
+    dataset = datasets.ImageFolder(
+        root=data_dir,
+        transform=transform
+    )
 
-model = model.to(device)
-model.eval()
+    eval_loader = DataLoader(
+        dataset,
+        batch_size=32,
+        shuffle=False,
+        num_workers=4,
+        pin_memory=False,
+    )
 
-preprocess = transforms.Compose([
-    transforms.Resize(256),
-    transforms.CenterCrop(224),
-    transforms.Grayscale(num_output_channels=3),
-    transforms.ToTensor(),
-    transforms.Normalize(
-        mean=[0.485, 0.456, 0.406],
-        std=[0.229, 0.224, 0.225]
-    ),
-])
+    model = densenet201(weights=None)
 
+    for param in model.parameters():
+        param.requires_grad = False
 
-def run_prediction(filename):
-    image = Image.open(filename).convert("RGB")
-    tensor = preprocess(image).unsqueeze(0).to(device)
+    if platform.system() == 'Darwin':
+        device = torch.device(
+            "mps" if torch.backends.mps.is_available() else "cpu"
+        )
+    else:
+        device = torch.device(
+            "cuda" if torch.cuda.is_available() else "cpu"
+        )
+
+    model.classifier = nn.Linear(1920, 2)
+
+    if device.type == "cuda":
+        if torch.cuda.device_count() > 1:
+            model = torch.nn.DataParallel(model)
+
+    model.load_state_dict(
+        torch.load(model_path, map_location=device)
+    )
+
+    model = model.to(device)
+
+    model.eval()
+
+    predArray = []
+    actualArray = []
+    probabilityArray = []
 
     with torch.no_grad():
-        output = model(tensor)
-        pred = torch.argmax(output, dim=1).item()
 
-    return "normal" if pred == 0 else "pneumonia"
+        for images, labels in eval_loader:
 
+            images = images.to(device)
+            labels = labels.to(device)
 
-def evaluate():
-    normal_images = [f for f in os.listdir(filenameN) if not f.startswith('.')]
-    pneumonia_images = [f for f in os.listdir(filenameP) if not f.startswith('.')]
+            outputs = model(images)
 
-    correct = 0
-    total = 0
+            probs = torch.softmax(outputs, dim=1)
 
-    for image_name in normal_images:
-        path = os.path.join(filenameN, image_name)
-        pred = run_prediction(path)
-        correct += (pred == "normal")
-        total += 1
-        print(f"Normal → {pred}")
+            preds = torch.argmax(probs, dim=1)
 
-    for image_name in pneumonia_images:
-        path = os.path.join(filenameP, image_name)
-        pred = run_prediction(path)
-        correct += (pred == "pneumonia")
-        total += 1
-        print(f"Pneumonia → {pred}")
+            pneumonia_probs = probs[:, 1]
 
-    print(f"\nAccuracy: {correct}/{total} ({100 * correct / total:.2f}%)")
+            predArray.extend(preds.cpu().numpy())
+            actualArray.extend(labels.cpu().numpy())
 
+            probabilityArray.extend(
+                pneumonia_probs.cpu().numpy()
+            )
 
-if __name__ == '__main__':
-    print(f"Evaluating on: {device}")
-    print(f"Normal images:    {len([f for f in os.listdir(filenameN) if not f.startswith('.')])}")
-    print(f"Pneumonia images: {len([f for f in os.listdir(filenameP) if not f.startswith('.')])}")
-    print()
-    evaluate()
+    accuracy = accuracy_score(
+        actualArray,
+        predArray
+    )
+
+    precision = precision_score(
+        actualArray,
+        predArray,
+        zero_division=0
+    )
+
+    recall = recall_score(
+        actualArray,
+        predArray,
+        zero_division=0
+    )
+
+    f1 = f1_score(
+        actualArray,
+        predArray,
+        zero_division=0
+    )
+
+    confusionMatrix = confusion_matrix(
+        actualArray,
+        predArray,
+        labels=[0, 1]
+    )
+
+    fpr, tpr, _ = roc_curve(
+        actualArray,
+        probabilityArray
+    )
+
+    roc_auc = auc(fpr, tpr)
+
+    results.append({
+        "Accuracy": accuracy,
+        "Precision": precision,
+        "Recall": recall,
+        "F1-Score": f1,
+        "ROC-AUC": roc_auc,
+        "True Positives": confusionMatrix[1, 1],
+        "False Positives": confusionMatrix[0, 1],
+        "True Negatives": confusionMatrix[0, 0],
+        "False Negatives": confusionMatrix[1, 0]
+    })
+
+    print(f"""
+        ===== Evaluation Results =====
+
+        Accuracy: {accuracy:.4f}
+        Precision: {precision:.4f}
+        Recall: {recall:.4f}
+        F1-Score: {f1:.4f}
+        ROC-AUC: {roc_auc:.4f}
+
+        True Positives: {confusionMatrix[1, 1]}
+        False Positives: {confusionMatrix[0, 1]}
+        True Negatives: {confusionMatrix[0, 0]}
+        False Negatives: {confusionMatrix[1, 0]}
+        """)
+
+    df = pd.DataFrame(results)
+    df.to_csv(f"{save_file_path}/evaluation_results.csv", index=False)
+
+    if plot:
+
+        plt.figure(figsize=(8, 6))
+
+        plt.plot(
+            fpr,
+            tpr,
+            label=f"AUC = {roc_auc:.4f}"
+        )
+
+        plt.plot(
+            [0, 1],
+            [0, 1],
+            linestyle="--"
+        )
+
+        plt.xlabel("False Positive Rate")
+        plt.ylabel("True Positive Rate")
+        plt.title("ROC Curve")
+        plt.legend()
+
+        plt.savefig(f"{save_file_path}/evaluation_plots.png")
+
+        plt.show()

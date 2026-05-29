@@ -1,3 +1,4 @@
+import torch
 import platform
 from test import test
 from train import train
@@ -11,36 +12,42 @@ MAC_CONFIG = {
     "plot": True,
     "evaluation_data_path": "/Users/christianrafferty/pneumonia_recognition/data/val",
     "evaluation_save_path": "/Users/christianrafferty/pneumonia_recognition/results/evaluation_results",
-    "model_path": "/Users/christianrafferty/pneumonia_recognition/models/pneumonia_model.pth",
     "test_save_path": "/Users/christianrafferty/pneumonia_recognition/results/test_results",
     "test_data_dir": "/Users/christianrafferty/pneumonia_recognition/data/test"
 }
 
 WINDOWS_CONFIG = {
     "epochs": 150,
-    "training_results_path": "/Users/christianrafferty/pneumonia_recognition/results/train_results",
-    "model_path": "/Users/christianrafferty/pneumonia_recognition/models/pneumonia_model.pth",
-    "training_data_path": "/Users/christianrafferty/pneumonia_recognition/data/train",
+    "training_results_path": r"C:\Users\Owner\pneumonia_recognition\results\train_results",
+    "model_path": r"C:\Users\Owner\pneumonia_recognition\models\pneumonia_model.pth",
+    "training_data_path": r"C:\Users\Owner\pneumonia_recognition\data\train",
     "plot": True,
-    "evaluation_data_path": "/Users/christianrafferty/pneumonia_recognition/data/val",
-    "evaluation_save_path": "/Users/christianrafferty/pneumonia_recognition/results/evaluation_results",
-    "model_path": "/Users/christianrafferty/pneumonia_recognition/models/pneumonia_model.pth",
-    "test_save_path": "/Users/christianrafferty/pneumonia_recognition/results/test_results",
-    "test_data_dir": "/Users/christianrafferty/pneumonia_recognition/data/test"
+    "evaluation_data_path": r"/C:\Users\Owner\pneumonia_recognition\data\val",
+    "evaluation_save_path": r"C:\Users\Owner\pneumonia_recognition\results\eval_results",
+    "test_save_path": r"C:\Users\Owner\pneumonia_recognition\results\test_results",
+    "test_data_dir": r"C:\Users\Owner\pneumonia_recognition\data\test"
 }
 
 def pipeline(config):
+    print("\n\n === Beginning === \n\n")
+    
+    if platform.system() == "Darwin":
+        if not torch.mps.is_available():
+           raise Exception("GPU must be used")
+    elif not torch.cuda.is_available():
+        raise Exception("GPU must be used")
+
     train(epochs = config["epochs"],
-          filepath = config["training_results_path"],
+          save_file_path = config["training_results_path"],
           model_path = config["model_path"],
           data_dir = config["training_data_path"],
           plot = config["plot"])
     evaluate(save_file_path=config["evaluation_save_path"], 
              model_path=config["model_path"], 
-             data_dir=config["evaluation_data_path"], 
-             plot=config["plot"])
+             data_dir=config["evaluation_data_path"],)
     test(save_file_path=config["test_save_path"], 
-         model_path=config["model_path"], 
+         plot=config["plot"],
+         model_path=config["model_path"],
          data_dir=config["test_data_dir"])
     
 if __name__ == "__main__":

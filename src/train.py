@@ -37,13 +37,13 @@ def train(epochs, save_file_path, model_path, data_dir,  plot=False):
         param.requires_grad = False
 
     if platform.system() == 'Darwin':
-        device = torch.device("mps" if torch.backends.mps.is_available() else "cpu")
+        device = torch.device("mps")
     else:
-        device = torch.device("cuda" if torch.backends.cuda.is_available() else "cpu")
+        device = torch.device("cuda")
 
     model.classifier = nn.Linear(1920, 2)
 
-    if device == "cuda":
+    if device == torch.device("cuda"):
         if torch.cuda.device_count() > 1:
             model = torch.nn.DataParallel(model)
 

@@ -20,7 +20,7 @@ MAC_CONFIG = {
 WINDOWS_CONFIG = {
     "epochs": 150,
     "training_results_path": r"C:\Users\Owner\pneumonia_recognition\results\train_results",
-    "model_path": r"C:\Users\Owner\pneumonia_recognition\models\pneumonia_model.pth",
+    "model_path": r"C:\Users\Owner\pneumonia_recognition\models",
     "training_data_path": r"C:\Users\Owner\pneumonia_recognition\data\train",
     "plot": True,
     "evaluation_data_path": r"C:\Users\Owner\pneumonia_recognition\data\val",

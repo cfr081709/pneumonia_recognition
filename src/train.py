@@ -8,10 +8,19 @@ import matplotlib.pyplot as plt
 from torch.utils.data import DataLoader
 from torchvision import datasets, transforms
 from torchvision.models import densenet201, DenseNet201_Weights
-from sklearn.metrics import confusion_matrix, precision_score, accuracy_score, roc_curve, auc, recall_score, f1_score
+from sklearn.metrics import (
+    confusion_matrix,
+    precision_score,
+    accuracy_score,
+    recall_score,
+    f1_score,
+    roc_curve,
+    auc
+)
 
-def train(epochs, save_file_path, model_path, data_dir,  plot=False):
-    
+
+def train(epochs, save_file_path, model_path, data_dir, plot=False):
+
     best_auc = 0
 
     transform = transforms.Compose([
@@ -39,37 +48,32 @@ def train(epochs, save_file_path, model_path, data_dir,  plot=False):
     for param in model.parameters():
         param.requires_grad = False
 
-    if platform.system() == 'Darwin':
-        device = torch.device("mps")
-    else:
-        device = torch.device("cuda")
-
     model.classifier = nn.Linear(1920, 2)
 
-    if device == torch.device("cuda"):
-        if torch.cuda.device_count() > 1:
-            model = torch.nn.DataParallel(model)
-
+    device = torch.device("mps" if platform.system() == "Darwin" else "cuda")
     model = model.to(device)
 
     criterion = nn.CrossEntropyLoss()
-
     optimizer = torch.optim.Adam(model.classifier.parameters(), lr=1e-4)
-    
+
     results = []
+
     accuracy_scores = []
     precision_scores = []
-    true_neg_over = []
-    false_pos_over = []
-    true_pos_over = []
-    false_neg_over = []
     recall_scores = []
     f1_scores = []
 
+    true_pos_over = []
+    false_pos_over = []
+    true_neg_over = []
+    false_neg_over = []
+
+    os.makedirs(save_file_path, exist_ok=True)
     os.makedirs(os.path.dirname(model_path), exist_ok=True)
 
-
     for epoch in range(epochs):
+
+        print(f"\nEpoch {epoch+1}/{epochs}")
 
         start_time = time.time()
 
@@ -93,64 +97,40 @@ def train(epochs, save_file_path, model_path, data_dir,  plot=False):
             loss = criterion(outputs, labels)
 
             loss.backward()
-
             optimizer.step()
 
             total_loss += loss.item()
 
             probs = torch.softmax(outputs, dim=1)
-
             preds = torch.argmax(probs, dim=1)
 
-            pneumonia_probs = probs[:, 1]
-
-            predArray.extend(preds.cpu().numpy())
-            actualArray.extend(labels.cpu().numpy())
-            probabilityArray.extend(pneumonia_probs.detach().cpu().numpy())
+            predArray.extend(preds.detach().cpu().numpy())
+            actualArray.extend(labels.detach().cpu().numpy())
+            probabilityArray.extend(probs[:, 1].detach().cpu().numpy())
 
         accuracy = accuracy_score(actualArray, predArray)
+        precision = precision_score(actualArray, predArray, zero_division=0)
+        recall = recall_score(actualArray, predArray, zero_division=0)
+        f1 = f1_score(actualArray, predArray, zero_division=0)
 
-        precision = precision_score(
-            actualArray,
-            predArray,
-            zero_division=0
-        )
+        cm = confusion_matrix(actualArray, predArray, labels=[0, 1])
 
-        recall = recall_score(
-            actualArray,
-            predArray,
-            zero_division=0
-        )
-
-        f1 = f1_score(
-            actualArray,
-            predArray,
-            zero_division=0
-        )
-
-        confusionMatrix = confusion_matrix(
-            actualArray,
-            predArray,
-            labels=[0, 1]
-        )
-
-        true_pos_over.append(confusionMatrix[1, 1])
-        false_pos_over.append(confusionMatrix[0, 1])
-        true_neg_over.append(confusionMatrix[0, 0])
-        false_neg_over.append(confusionMatrix[1, 0])
-        
-        accuracy_scores.append(accuracy)
-        f1_scores.append(f1)
-        recall_scores.append(recall)
-        precision_scores.append(precision)
+        tp, fp, tn, fn = cm[1, 1], cm[0, 1], cm[0, 0], cm[1, 0]
 
         fpr, tpr, _ = roc_curve(actualArray, probabilityArray)
-
         roc_auc = auc(fpr, tpr)
 
         end_time = time.time()
 
-        total_time = end_time - start_time
+        accuracy_scores.append(accuracy)
+        precision_scores.append(precision)
+        recall_scores.append(recall)
+        f1_scores.append(f1)
+
+        true_pos_over.append(tp)
+        false_pos_over.append(fp)
+        true_neg_over.append(tn)
+        false_neg_over.append(fn)
 
         results.append({
             "Epoch": epoch + 1,
@@ -158,102 +138,71 @@ def train(epochs, save_file_path, model_path, data_dir,  plot=False):
             "Accuracy": accuracy,
             "Precision": precision,
             "Recall": recall,
-            "F1-Score": f1,
+            "F1": f1,
             "ROC-AUC": roc_auc,
-            "True Positives": confusionMatrix[1, 1],
-            "False Positives": confusionMatrix[0, 1],
-            "True Negatives": confusionMatrix[0, 0],
-            "False Negatives": confusionMatrix[1, 0],
-            "Time": total_time
+            "TP": tp,
+            "FP": fp,
+            "TN": tn,
+            "FN": fn,
+            "Time": end_time - start_time
         })
 
-
-
         print(f"""
-            ===== TRAINING ====
-              
-            Epoch {epoch+1}/{epochs}
             Loss: {total_loss:.4f}
-
-            Accuracy: {accuracy:.4f}
-            Precision: {precision:.4f}
-            Recall: {recall:.4f}
-            F1-Score: {f1:.4f}
-            ROC-AUC: {roc_auc:.4f}
-
-            True Positives: {confusionMatrix[1, 1]}
-            False Positives: {confusionMatrix[0, 1]}
-            True Negatives: {confusionMatrix[0, 0]}
-            False Negatives: {confusionMatrix[1, 0]}
-
-            Time: {total_time}
+            Acc: {accuracy:.4f} | Prec: {precision:.4f} | Recall: {recall:.4f} | F1: {f1:.4f}
+            AUC: {roc_auc:.4f}
+            TP:{tp} FP:{fp} TN:{tn} FN:{fn}
             """)
 
         df = pd.DataFrame(results)
-
-        df.to_csv(f"{save_file_path}/train_results.csv", index=False)
-
-        if roc_auc > best_auc:
-            best_auc = roc_auc
-            torch.save(model.state_dict(), model_path)
-        if(epoch + 1) % 25 == 0:
-            torch.save(model.save_dict(), f"{model_path}/checkpoints/model_epoch_{epoch}")
-
+        df.to_csv(os.path.join(save_file_path, "train_results.csv"), index=False)
 
     if plot:
-        plt.figure(figsize=(12, 8))
+        
+        print("accuracy_scores:", accuracy_scores)
+        print("precision_scores:", precision_scores)
+        print("recall_scores:", recall_scores)
+        print("f1_scores:", f1_scores)
+
+        if len(accuracy_scores) == 0:
+            print("No data to plot")
+            return
+
+        epochs_range = range(1, len(accuracy_scores) + 1)
+
+        plt.figure(figsize=(14, 10))
+
         plt.subplot(2, 4, 1)
-        plt.plot(accuracy)
-        plt.title('Accuracy')
-        plt.xlabel('Epoch')
-        plt.ylabel('Accuracy')
+        plt.plot(epochs_range, accuracy_scores, marker='o')
+        plt.title("Accuracy")
 
         plt.subplot(2, 4, 2)
-        plt.plot(precision)
-        plt.title('Precision')
-        plt.xlabel('Epoch')
-        plt.ylabel('Precision')
+        plt.plot(epochs_range, precision_scores, marker='o')
+        plt.title("Precision")
 
         plt.subplot(2, 4, 3)
-        plt.plot(recall)
-        plt.title('Recall')
-        plt.xlabel('Epoch')
-        plt.ylabel('Recall')
+        plt.plot(epochs_range, recall_scores, marker='o')
+        plt.title("Recall")
 
         plt.subplot(2, 4, 4)
-        plt.plot(f1)
-        plt.title('F1-Score')
-        plt.xlabel('Epoch')
-        plt.ylabel('F1-Score')
+        plt.plot(epochs_range, f1_scores, marker='o')
+        plt.title("F1 Score")
 
         plt.subplot(2, 4, 5)
-        plt.plot(true_pos_over)
-        plt.title('True Positives')
-        plt.xlabel('Epoch')
-        plt.ylabel('Count')
+        plt.plot(epochs_range, true_pos_over, marker='o')
+        plt.title("True Positives")
 
         plt.subplot(2, 4, 6)
-        plt.plot(false_pos_over)
-        plt.title('False Positives')
-        plt.xlabel('Epoch')
-        plt.ylabel('Count')
+        plt.plot(epochs_range, false_pos_over, marker='o')
+        plt.title("False Positives")
 
         plt.subplot(2, 4, 7)
-        plt.plot(true_neg_over)
-        plt.title('True Negatives')
-        plt.xlabel('Epoch')
-        plt.ylabel('Count')
+        plt.plot(epochs_range, true_neg_over, marker='o')
+        plt.title("True Negatives")
 
         plt.subplot(2, 4, 8)
-        plt.plot(false_neg_over)
-        plt.title('False Negatives')
-        plt.xlabel('Epoch')
-        plt.ylabel('Count')
+        plt.plot(epochs_range, false_neg_over, marker='o')
+        plt.title("False Negatives")
 
         plt.tight_layout()
-
-        plt.savefig(f"{save_file_path}/train_plots.png")
-        
         plt.show()
-
-    

@@ -23,7 +23,7 @@ WINDOWS_CONFIG = {
     "model_path": r"C:\Users\Owner\pneumonia_recognition\models\pneumonia_model.pth",
     "training_data_path": r"C:\Users\Owner\pneumonia_recognition\data\train",
     "plot": True,
-    "evaluation_data_path": r"/C:\Users\Owner\pneumonia_recognition\data\val",
+    "evaluation_data_path": r"C:\Users\Owner\pneumonia_recognition\data\val",
     "evaluation_save_path": r"C:\Users\Owner\pneumonia_recognition\results\eval_results",
     "test_save_path": r"C:\Users\Owner\pneumonia_recognition\results\test_results",
     "test_data_dir": r"C:\Users\Owner\pneumonia_recognition\data\test"
@@ -39,9 +39,9 @@ def pipeline(config):
 
     if platform.system() == "Darwin":
         if not torch.mps.is_available() == False:
-           raise Exception("GPU must be used")
+           raise Exception("GPU not availiable")
     elif torch.cuda.is_available() == False:
-        raise Exception("GPU must be used")
+        raise Exception("GPU not availiable")
 
     print("\nGPU available continuing\n")
 

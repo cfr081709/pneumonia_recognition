@@ -11,6 +11,8 @@ from torchvision.models import densenet201, DenseNet201_Weights
 from sklearn.metrics import confusion_matrix, precision_score, accuracy_score, roc_curve, auc, recall_score, f1_score
 
 def train(epochs, save_file_path, model_path, data_dir,  plot=False):
+    
+    best_auc = 0
 
     transform = transforms.Compose([
         transforms.Resize((224, 224)),
@@ -191,7 +193,11 @@ def train(epochs, save_file_path, model_path, data_dir,  plot=False):
 
         df.to_csv(f"{save_file_path}/train_results.csv", index=False)
 
-        torch.save(model.state_dict(), model_path)
+        if roc_auc > best_auc:
+            best_auc = roc_auc
+            torch.save(model.state_dict(), model_path)
+        if(epoch + 1) % 25 == 0:
+            torch.save(model.save_dict(), f"{model_path}/checkpoints/model_epoch_{epoch}")
 
 
     if plot:

@@ -1,4 +1,5 @@
 import os
+import time
 import torch
 import platform
 import pandas as pd
@@ -54,18 +55,21 @@ def train(epochs, save_file_path, model_path, data_dir,  plot=False):
     optimizer = torch.optim.Adam(model.classifier.parameters(), lr=1e-4)
     
     results = []
-    accuracy = []
-    precision = []
-    true_neg = []
-    false_pos = []
-    true_pos = []
-    false_neg = []
-    recall = []
-    f1 = []
+    accuracy_scores = []
+    precision_scores = []
+    true_neg_over = []
+    false_pos_over = []
+    true_pos_over = []
+    false_neg_over = []
+    recall_scores = []
+    f1_scores = []
 
     os.makedirs(os.path.dirname(model_path), exist_ok=True)
 
+
     for epoch in range(epochs):
+
+        start_time = time.time()
 
         model.train()
 
@@ -128,14 +132,23 @@ def train(epochs, save_file_path, model_path, data_dir,  plot=False):
             labels=[0, 1]
         )
 
-        true_pos.append(confusionMatrix[1, 1])
-        false_pos.append(confusionMatrix[0, 1])
-        true_neg.append(confusionMatrix[0, 0])
-        false_neg.append(confusionMatrix[1, 0])
+        true_pos_over.append(confusionMatrix[1, 1])
+        false_pos_over.append(confusionMatrix[0, 1])
+        true_neg_over.append(confusionMatrix[0, 0])
+        false_neg_over.append(confusionMatrix[1, 0])
+        
+        accuracy_scores.append(accuracy)
+        f1_scores.append(f1)
+        recall_scores.append(recall)
+        precision_scores.append(precision)
 
         fpr, tpr, _ = roc_curve(actualArray, probabilityArray)
 
         roc_auc = auc(fpr, tpr)
+
+        end_time = time.time()
+
+        total_time = end_time - start_time
 
         results.append({
             "Epoch": epoch + 1,
@@ -148,8 +161,11 @@ def train(epochs, save_file_path, model_path, data_dir,  plot=False):
             "True Positives": confusionMatrix[1, 1],
             "False Positives": confusionMatrix[0, 1],
             "True Negatives": confusionMatrix[0, 0],
-            "False Negatives": confusionMatrix[1, 0]
+            "False Negatives": confusionMatrix[1, 0],
+            "Time": total_time
         })
+
+
 
         print(f"""
             ===== TRAINING ====
@@ -167,6 +183,8 @@ def train(epochs, save_file_path, model_path, data_dir,  plot=False):
             False Positives: {confusionMatrix[0, 1]}
             True Negatives: {confusionMatrix[0, 0]}
             False Negatives: {confusionMatrix[1, 0]}
+
+            Time: {total_time}
             """)
 
         df = pd.DataFrame(results)
@@ -174,6 +192,7 @@ def train(epochs, save_file_path, model_path, data_dir,  plot=False):
         df.to_csv(f"{save_file_path}/train_results.csv", index=False)
 
         torch.save(model.state_dict(), model_path)
+
 
     if plot:
         plt.figure(figsize=(12, 8))
@@ -202,25 +221,25 @@ def train(epochs, save_file_path, model_path, data_dir,  plot=False):
         plt.ylabel('F1-Score')
 
         plt.subplot(2, 4, 5)
-        plt.plot(true_pos)
+        plt.plot(true_pos_over)
         plt.title('True Positives')
         plt.xlabel('Epoch')
         plt.ylabel('Count')
 
         plt.subplot(2, 4, 6)
-        plt.plot(false_pos)
+        plt.plot(false_pos_over)
         plt.title('False Positives')
         plt.xlabel('Epoch')
         plt.ylabel('Count')
 
-        plt.subplot(2, 4, 5)
-        plt.plot(true_neg)
+        plt.subplot(2, 4, 7)
+        plt.plot(true_neg_over)
         plt.title('True Negatives')
         plt.xlabel('Epoch')
         plt.ylabel('Count')
 
-        plt.subplot(2, 4, 6)
-        plt.plot(false_neg)
+        plt.subplot(2, 4, 8)
+        plt.plot(false_neg_over)
         plt.title('False Negatives')
         plt.xlabel('Epoch')
         plt.ylabel('Count')
@@ -230,3 +249,5 @@ def train(epochs, save_file_path, model_path, data_dir,  plot=False):
         plt.savefig(f"{save_file_path}/train_plots.png")
         
         plt.show()
+
+    

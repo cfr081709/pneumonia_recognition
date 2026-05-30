@@ -1,3 +1,4 @@
+import os
 import torch
 import platform
 from test import test
@@ -29,26 +30,43 @@ WINDOWS_CONFIG = {
 }
 
 def pipeline(config):
+
+    os.system('cls')
+
     print("\n\n === Beginning === \n\n")
     
+    print("\n == Checking system == \n")
+
     if platform.system() == "Darwin":
-        if not torch.mps.is_available():
+        if not torch.mps.is_available() == False:
            raise Exception("GPU must be used")
-    elif not torch.cuda.is_available():
+    elif torch.cuda.is_available() == False:
         raise Exception("GPU must be used")
+
+    print("\nGPU available continuing\n")
+
+    print("\n == Beginning Training == \n")
 
     train(epochs = config["epochs"],
           save_file_path = config["training_results_path"],
           model_path = config["model_path"],
           data_dir = config["training_data_path"],
           plot = config["plot"])
+    
+    print("\n == Beginning Eval == \n")
+
     evaluate(save_file_path=config["evaluation_save_path"], 
              model_path=config["model_path"], 
              data_dir=config["evaluation_data_path"],)
+    
+    print("\n == Beginning Testing == \n")
+
     test(save_file_path=config["test_save_path"], 
          plot=config["plot"],
          model_path=config["model_path"],
          data_dir=config["test_data_dir"])
+    
+    print("\n == Finished == ")
     
 if __name__ == "__main__":
     if platform.system() == "Darwin":

@@ -1,0 +1,2 @@
+Accuracy,Precision,Recall,F1-Score,ROC-AUC,True Positives,False Positives,True Negatives,False Negatives
+0.8125,0.7272727272727273,1.0,0.8421052631578947,0.953125,8,3,5,0

@@ -1,7 +1,8 @@
 import torch
 import platform
-from torch import nn
 import pandas as pd
+from torch import nn
+from pathlib import Path
 import matplotlib.pyplot as plt
 from torch.utils.data import DataLoader
 from torchvision import transforms, datasets
@@ -51,9 +52,32 @@ def evaluate(save_file_path, model_path, data_dir, plot=False):
         if torch.cuda.device_count() > 1:
             model = torch.nn.DataParallel(model)
 
-    model.load_state_dict(
-        torch.load(model_path, map_location=device)
-    )
+    try:
+        model.load_state_dict(torch.load(fr"{model_path}/best_auc/model.pth"))
+    except:
+        print("\nNo best_auc model.pth | If no checkpoint model.pth program will quit\n")
+
+        best_auc = 0
+
+        best_file = None
+
+        checkpoint_files = list(Path(fr"{model_path}/checkpoints").iterdir())
+        print("Checkpoint dir contents:", checkpoint_files)
+
+        for file in Path(fr"{model_path}/checkpoints").iterdir():
+            if file.suffix != ".csv":
+                continue
+            df = pd.read_csv(file)
+            auc_value = df["best_auc"].iloc[0]
+            if auc_value > best_auc:
+                best_auc = auc_value
+                best_file = file.with_suffix(".pth")
+        
+        try:
+            model.load_state_dict(torch.load(best_file))
+        except:
+            print("\nCould not load checkpoint file | Exiting\n")
+            raise Exception("\nNo model.pth files loaded\n")
 
     model = model.to(device)
 
@@ -135,7 +159,7 @@ def evaluate(save_file_path, model_path, data_dir, plot=False):
 
     print(f"""
         ===== Evaluation Results =====
-
+          
         Accuracy: {accuracy:.4f}
         Precision: {precision:.4f}
         Recall: {recall:.4f}

@@ -62,11 +62,18 @@ def pipeline(config):
     print("\n == Beginning Testing == \n")
 
     test(save_file_path=config["test_save_path"], 
-         plot=config["plot"],
          model_path=config["model_path"],
          data_dir=config["test_data_dir"])
     
     print("\n == Finished == ")
+
+def runTest(config):
+    print("\n == Beginning Testing == \n")
+
+    test(save_file_path=config["test_save_path"], 
+         model_path=config["model_path"],
+         data_dir=config["test_data_dir"])
+
     
 if __name__ == "__main__":
     if platform.system() == "Darwin":

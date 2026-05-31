@@ -19,14 +19,39 @@ from sklearn.metrics import (
 )
 
 
-def train(epochs, save_file_path, model_path, data_dir, plot=False):
+def get_device():
+    if platform.system() == "Darwin" and torch.backends.mps.is_available():
+        return torch.device("mps")
+    if torch.cuda.is_available():
+        return torch.device("cuda")
+    return torch.device("cpu")
 
-    best_auc = 0
+
+def get_class_weights(dataset, device):
+    targets = torch.tensor(dataset.targets)
+    class_counts = torch.bincount(targets, minlength=len(dataset.classes)).float()
+    weights = class_counts.sum() / (len(class_counts) * class_counts)
+    return weights.to(device)
+
+
+def train(epochs, save_file_path, model_path, data_dir, plot=False):
 
     transform = transforms.Compose([
         transforms.Resize((224, 224)),
         transforms.Grayscale(num_output_channels=3),
         transforms.ToTensor(),
+        transforms.RandomRotation(7),
+        transforms.RandomAffine(
+            degrees=0,
+            translate=(0.05, 0.05),
+            scale=(0.95, 1.05)
+        ),
+        transforms.ColorJitter(
+            brightness = 0.4,
+            contrast = 0.4,
+            saturation = 0,
+            hue = 0
+        ),
         transforms.Normalize(
             mean=[0.485, 0.456, 0.406],
             std=[0.229, 0.224, 0.225]
@@ -45,16 +70,31 @@ def train(epochs, save_file_path, model_path, data_dir, plot=False):
 
     model = densenet201(weights=DenseNet201_Weights.DEFAULT)
 
+    model.classifier = nn.Linear(1920, 2)
+
     for param in model.parameters():
         param.requires_grad = False
 
-    model.classifier = nn.Linear(1920, 2)
+    for param in model.features.denseblock4.parameters():
+        param.requires_grad = True
 
-    device = torch.device("mps" if platform.system() == "Darwin" else "cuda")
+    for param in model.features.norm5.parameters():
+        param.requires_grad = True
+
+    for param in model.classifier.parameters():
+        param.requires_grad = True
+
+    device = get_device()
     model = model.to(device)
 
-    criterion = nn.CrossEntropyLoss()
-    optimizer = torch.optim.Adam(model.classifier.parameters(), lr=1e-4)
+    class_weights = get_class_weights(dataset, device)
+    criterion = nn.CrossEntropyLoss(weight=class_weights)
+
+    optimizer = torch.optim.Adam([
+        {"params": model.features.denseblock4.parameters(), "lr": 1e-5},
+        {"params": model.features.norm5.parameters(), "lr": 1e-5},
+        {"params": model.classifier.parameters(), "lr": 1e-4},
+    ])
 
     results = []
 
@@ -144,6 +184,7 @@ def train(epochs, save_file_path, model_path, data_dir, plot=False):
             "FP": fp,
             "TN": tn,
             "FN": fn,
+            "Score": ((accuracy + precision + recall + f1 + roc_auc) / 5),
             "Time": end_time - start_time
         })
 
@@ -205,4 +246,7 @@ def train(epochs, save_file_path, model_path, data_dir, plot=False):
         plt.title("False Negatives")
 
         plt.tight_layout()
+
+        plt.savefig(f"{save_file_path}/train_plots.png")
+
         plt.show()

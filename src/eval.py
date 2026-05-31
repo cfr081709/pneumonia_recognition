@@ -1,3 +1,4 @@
+import os
 import torch
 import platform
 import pandas as pd
@@ -8,6 +9,30 @@ from torch.utils.data import DataLoader
 from torchvision import transforms, datasets
 from torchvision.models import densenet201
 from sklearn.metrics import confusion_matrix, precision_score, accuracy_score, roc_curve, auc, recall_score, f1_score
+
+
+def get_device():
+    if platform.system() == "Darwin" and torch.backends.mps.is_available():
+        return torch.device("mps")
+    if torch.cuda.is_available():
+        return torch.device("cuda")
+    return torch.device("cpu")
+
+
+def tune_threshold(actual, probabilities):
+    best_threshold = 0.5
+    best_f1 = -1
+
+    for threshold in [i / 100 for i in range(5, 96)]:
+        preds = [1 if prob >= threshold else 0 for prob in probabilities]
+        score = f1_score(actual, preds, zero_division=0)
+
+        if score > best_f1:
+            best_f1 = score
+            best_threshold = threshold
+
+    return best_threshold, best_f1
+
 
 def evaluate(save_file_path, model_path, data_dir, plot=False):
 
@@ -41,10 +66,7 @@ def evaluate(save_file_path, model_path, data_dir, plot=False):
     for param in model.parameters():
         param.requires_grad = False
 
-    if platform.system() == 'Darwin':
-        device = torch.device("mps")
-    else:
-        device = torch.device("cuda")
+    device = get_device()
 
     model.classifier = nn.Linear(1920, 2)
 
@@ -57,7 +79,7 @@ def evaluate(save_file_path, model_path, data_dir, plot=False):
     except:
         print("\nNo best_auc model.pth | If no checkpoint model.pth program will quit\n")
 
-        best_auc = 0
+        best_score = 0
 
         best_file = None
 
@@ -68,9 +90,10 @@ def evaluate(save_file_path, model_path, data_dir, plot=False):
             if file.suffix != ".csv":
                 continue
             df = pd.read_csv(file)
-            auc_value = df["best_auc"].iloc[0]
-            if auc_value > best_auc:
-                best_auc = auc_value
+            score_column = "score" if "score" in df.columns else "best_auc"
+            score = df[score_column].iloc[0]
+            if score > best_score:
+                best_score = score
                 best_file = file.with_suffix(".pth")
         
         try:
@@ -83,7 +106,6 @@ def evaluate(save_file_path, model_path, data_dir, plot=False):
 
     model.eval()
 
-    predArray = []
     actualArray = []
     probabilityArray = []
 
@@ -98,16 +120,16 @@ def evaluate(save_file_path, model_path, data_dir, plot=False):
 
             probs = torch.softmax(outputs, dim=1)
 
-            preds = torch.argmax(probs, dim=1)
-
             pneumonia_probs = probs[:, 1]
 
-            predArray.extend(preds.cpu().numpy())
             actualArray.extend(labels.cpu().numpy())
 
             probabilityArray.extend(
                 pneumonia_probs.cpu().numpy()
             )
+
+    best_threshold, threshold_f1 = tune_threshold(actualArray, probabilityArray)
+    predArray = [1 if prob >= best_threshold else 0 for prob in probabilityArray]
 
     accuracy = accuracy_score(
         actualArray,
@@ -146,6 +168,7 @@ def evaluate(save_file_path, model_path, data_dir, plot=False):
     roc_auc = auc(fpr, tpr)
 
     results.append({
+        "Threshold": best_threshold,
         "Accuracy": accuracy,
         "Precision": precision,
         "Recall": recall,
@@ -157,9 +180,21 @@ def evaluate(save_file_path, model_path, data_dir, plot=False):
         "False Negatives": confusionMatrix[1, 0]
     })
 
+    os.makedirs(save_file_path, exist_ok=True)
+    os.makedirs(fr"{model_path}/best_auc", exist_ok=True)
+
+    pd.DataFrame([{
+        "Threshold": best_threshold,
+        "Validation F1": threshold_f1,
+    }]).to_csv(fr"{model_path}/best_auc/threshold_metrics.csv", index=False)
+
+    with open(fr"{model_path}/best_auc/threshold.txt", "w") as threshold_file:
+        threshold_file.write(str(best_threshold))
+
     print(f"""
         ===== Evaluation Results =====
           
+        Threshold: {best_threshold:.2f}
         Accuracy: {accuracy:.4f}
         Precision: {precision:.4f}
         Recall: {recall:.4f}

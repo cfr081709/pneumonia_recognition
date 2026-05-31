@@ -1,7 +1,9 @@
 import torch
 import platform
 import torchvision
+import pandas as pd
 from torch import nn
+from pathlib import Path
 from torch.utils.data import DataLoader
 from torchvision.models import densenet201
 
@@ -37,6 +39,33 @@ def predict(image_path, model_path):
     if torch.device() == "cuda":
         if torch.cuda.device_count() > 1:
             model = torch.nn.DataParallel(model)
+
+    try:
+        model.load_state_dict(torch.load(fr"{model_path}/best_auc/model.pth"))
+    except:
+        print("\nNo best_auc model.pth | If no checkpoint model.pth program will quit\n")
+
+        best_score = 0
+
+        best_file = None
+
+        checkpoint_files = list(Path(fr"{model_path}/checkpoints").iterdir())
+        print("Checkpoint dir contents:", checkpoint_files)
+
+        for file in Path(fr"{model_path}/checkpoints").iterdir():
+            if file.suffix != ".csv":
+                continue
+            df = pd.read_csv(file)
+            score = df["score"].iloc[0]
+            if score > best_score:
+                best_score = df
+                best_file = file.with_suffix(".pth")
+        
+        try:
+            model.load_state_dict(torch.load(best_file))
+        except:
+            print("\nCould not load checkpoint file | Exiting\n")
+            raise Exception("\nNo model.pth files loaded\n")
 
     model = model.to(device)
 

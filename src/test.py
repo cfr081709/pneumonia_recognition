@@ -21,7 +21,8 @@ def load_threshold(model_path):
     threshold_path = Path(model_path) / "best_auc" / "threshold.txt"
 
     if not threshold_path.exists():
-        return 0.5
+        # default to a higher threshold to reduce false positives (favor precision)
+        return 0.7
 
     return float(threshold_path.read_text().strip())
 
@@ -133,6 +134,8 @@ def test(save_file_path, model_path, data_dir):
     fpr, tpr, _ = roc_curve(actualArray, probabilityArray)
     roc_auc = auc(fpr, tpr)
 
+    score = (accuracy + precision + recall + f1 + roc_auc) / 5
+
     results.append({
         "Threshold": threshold,
         "Accuracy": accuracy,
@@ -140,10 +143,11 @@ def test(save_file_path, model_path, data_dir):
         "Recall": recall,
         "F1-Score": f1,
         "ROC-AUC": roc_auc,
-        "True Positives": confusionMatrix[1, 1],
-        "False Positives": confusionMatrix[0, 1],
-        "True Negatives": confusionMatrix[0, 0],
-        "False Negatives": confusionMatrix[1, 0]
+        "Score": score,
+        "TP": int(confusionMatrix[1, 1]),
+        "FP": int(confusionMatrix[0, 1]),
+        "TN": int(confusionMatrix[0, 0]),
+        "FN": int(confusionMatrix[1, 0])
     })
 
     pd.DataFrame(results).to_csv(f"{save_file_path}/test_results.csv", index=False)

@@ -1,2 +1,2 @@
-Threshold,Validation F1
-0.5,0.9579399141630901
+Threshold,Validation Precision,Validation F1
+0.92,1.0,0.6697142857142857

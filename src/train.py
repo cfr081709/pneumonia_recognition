@@ -36,6 +36,8 @@ def get_class_weights(dataset, device):
 
 def train(epochs, save_file_path, model_path, data_dir, plot=False):
 
+    threshold = 0.3
+
     transform = transforms.Compose([
         transforms.Resize((224, 224)),
         transforms.Grayscale(num_output_channels=3),
@@ -142,7 +144,7 @@ def train(epochs, save_file_path, model_path, data_dir, plot=False):
             total_loss += loss.item()
 
             probs = torch.softmax(outputs, dim=1)
-            preds = torch.argmax(probs, dim=1)
+            preds = (probs[:, 1] >= threshold).long
 
             predArray.extend(preds.detach().cpu().numpy())
             actualArray.extend(labels.detach().cpu().numpy())

@@ -20,18 +20,29 @@ def get_device():
 
 
 def tune_threshold(actual, probabilities):
+    """
+    Tune threshold prioritizing precision over recall.
+
+    We sweep thresholds and choose the one with highest precision.
+    If multiple thresholds have equal precision, prefer the one
+    with higher F1 as a tiebreaker.
+    """
     best_threshold = 0.5
+    best_precision = -1
     best_f1 = -1
 
-    for threshold in [i / 100 for i in range(5, 96)]:
+    # search a wide range but bias toward higher thresholds
+    for threshold in [i / 100 for i in range(5, 100)]:
         preds = [1 if prob >= threshold else 0 for prob in probabilities]
-        score = f1_score(actual, preds, zero_division=0)
+        precision = precision_score(actual, preds, zero_division=0)
+        f1 = f1_score(actual, preds, zero_division=0)
 
-        if score > best_f1:
-            best_f1 = score
+        if (precision > best_precision) or (precision == best_precision and f1 > best_f1):
+            best_precision = precision
+            best_f1 = f1
             best_threshold = threshold
 
-    return best_threshold, best_f1
+    return best_threshold, best_precision, best_f1
 
 
 def evaluate(save_file_path, model_path, data_dir, plot=False):
@@ -128,7 +139,7 @@ def evaluate(save_file_path, model_path, data_dir, plot=False):
                 pneumonia_probs.cpu().numpy()
             )
 
-    best_threshold, threshold_f1 = tune_threshold(actualArray, probabilityArray)
+    best_threshold, threshold_precision, threshold_f1 = tune_threshold(actualArray, probabilityArray)
     predArray = [1 if prob >= best_threshold else 0 for prob in probabilityArray]
 
     accuracy = accuracy_score(
@@ -167,6 +178,8 @@ def evaluate(save_file_path, model_path, data_dir, plot=False):
 
     roc_auc = auc(fpr, tpr)
 
+    score = (accuracy + precision + recall + f1 + roc_auc) / 5
+
     results.append({
         "Threshold": best_threshold,
         "Accuracy": accuracy,
@@ -174,10 +187,11 @@ def evaluate(save_file_path, model_path, data_dir, plot=False):
         "Recall": recall,
         "F1-Score": f1,
         "ROC-AUC": roc_auc,
-        "True Positives": confusionMatrix[1, 1],
-        "False Positives": confusionMatrix[0, 1],
-        "True Negatives": confusionMatrix[0, 0],
-        "False Negatives": confusionMatrix[1, 0]
+        "Score": score,
+        "TP": int(confusionMatrix[1, 1]),
+        "FP": int(confusionMatrix[0, 1]),
+        "TN": int(confusionMatrix[0, 0]),
+        "FN": int(confusionMatrix[1, 0])
     })
 
     os.makedirs(save_file_path, exist_ok=True)
@@ -185,6 +199,7 @@ def evaluate(save_file_path, model_path, data_dir, plot=False):
 
     pd.DataFrame([{
         "Threshold": best_threshold,
+        "Validation Precision": threshold_precision,
         "Validation F1": threshold_f1,
     }]).to_csv(fr"{model_path}/best_auc/threshold_metrics.csv", index=False)
 

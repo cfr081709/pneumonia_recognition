@@ -83,7 +83,9 @@ Training plot:
 python src/eval.py
 ```
 
-Evaluation runs the model on the validation set and tunes the pneumonia decision threshold. Instead of always using `0.5`, the script searches thresholds from `0.05` to `0.95` and selects the threshold with the best validation F1 score.
+Evaluation runs the model on the validation set and tunes the pneumonia decision threshold. By default the evaluation now prioritizes precision (favouring fewer false positives) when selecting the decision threshold — this biases the system to make more conservative 'pneumonia' predictions.
+
+The evaluation script searches thresholds across a wide range and selects the threshold that maximizes validation precision (with F1 used as a tiebreaker). The selected threshold and its validation metrics are saved for use during testing.
 
 Evaluation results are saved to:
 
@@ -105,19 +107,17 @@ models/best_auc/threshold_metrics.csv
 python src/test.py
 ```
 
-Testing loads the saved threshold from evaluation when available. If no tuned threshold exists, it falls back to `0.5`.
+Testing loads the saved threshold from evaluation when available. If no tuned threshold exists, it falls back to a higher default of `0.7` to reduce false positives (this favors precision over recall).
 
-Test results include:
+Test results include the same metrics used during training to aid comparison:
 
-- accuracy
-- precision
-- recall
+- Accuracy
+- Precision
+- Recall
 - F1 score
 - ROC-AUC
-- true positives
-- false positives
-- true negatives
-- false negatives
+- Score (mean of Accuracy, Precision, Recall, F1, ROC-AUC)
+- TP, FP, TN, FN counts
 
 Results are saved to:
 
@@ -148,12 +148,12 @@ pneumonia_recognition/
     eval_results/
     test_results/
   src/
-    train.py
-    eval.py
-    test.py
-    main.py
-    model.py
-    data.py
+  train.py
+  eval.py
+  test.py
+  main.py
+  model.py
+  data.py
 ```
 
 ## Technologies

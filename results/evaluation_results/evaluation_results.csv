@@ -1,0 +1,2 @@
+Threshold,Accuracy,Precision,Recall,F1-Score,ROC-AUC,Score,TP,FP,TN,FN
+0.19,1.0,1.0,1.0,1.0,1.0,1.0,8,0,8,0

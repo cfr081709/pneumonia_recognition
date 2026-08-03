@@ -1,0 +1,100 @@
+ <!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Pneumonia Recognition</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <main>
+    <section id="form">
+      <div class="form-card">
+        <header class="form-header">
+          <h1>Pneumonia Recognition</h1>
+          <p>Submit your details and image for a quick scan.</p>
+          <div class="message-bar" id="messageBar" hidden>Submission successful.</div>
+        </header>
+        <form method="POST" action="/submit" enctype="multipart/form-data">
+          <div class="field-group upload-group">
+            <label for="imageUpload">Upload X-ray Image</label>
+            <div class="upload-box">
+              <span>Select or drag your file here</span>
+              <input type="file" id="imageUpload" accept="image/*" required>
+            </div>
+            <div class="preview-box" id="previewBox" aria-live="polite">
+              <span class="preview-label">Preview will appear here</span>
+              <img id="previewImage" alt="Image preview" hidden>
+            </div>
+          </div>
+
+          <button type="button" id="submitButton">Submit</button>
+          <div class="result-box" id="resultBox" hidden>
+            <p id="resultText"></p>
+          </div>
+        </form>
+        <script>
+          const fileInput = document.getElementById('imageUpload');
+          const previewImage = document.getElementById('previewImage');
+          const previewBox = document.getElementById('previewBox');
+          const submitButton = document.getElementById('submitButton');
+          const resultBox = document.getElementById('resultBox');
+          const resultText = document.getElementById('resultText');
+          const messageBar = document.getElementById('messageBar');
+
+          let selectedFile;
+
+          fileInput.addEventListener('change', () => {
+            if (!fileInput.files || !fileInput.files[0]) return;
+            selectedFile = fileInput.files[0];
+            const url = URL.createObjectURL(selectedFile);
+            previewImage.src = url;
+            previewImage.hidden = false;
+            previewBox.querySelector('.preview-label').hidden = true;
+          });
+
+          submitButton.addEventListener('click', () => {
+            if (!selectedFile) {
+              messageBar.textContent = 'Please choose an image first.';
+              messageBar.hidden = false;
+              return;
+            }
+
+            const reader = new FileReader();
+            reader.onload = async () => {
+              const dataUrl = reader.result;
+              const base64 = dataUrl.split(',')[1];
+
+              try {
+                const response = await fetch('/predict', {
+                  method: 'POST',
+                  headers: { 'Content-Type': 'application/json' },
+                  body: JSON.stringify({ image_base64: base64 }),
+                });
+
+                const data = await response.json();
+                if (!response.ok) {
+                  throw new Error(data.error || 'Prediction failed');
+                }
+
+                resultText.textContent = `Prediction: ${data.label} (confidence: ${data.confidence.toFixed(3)})`;
+                resultBox.hidden = false;
+                messageBar.hidden = true;
+              } catch (err) {
+                resultText.textContent = `Error: ${err.message}`;
+                resultBox.hidden = false;
+              }
+            };
+            reader.onerror = () => {
+              resultText.textContent = 'Error: Failed to read the selected file.';
+              resultBox.hidden = false;
+            };
+            reader.readAsDataURL(selectedFile);
+          });
+        </script>
+        </form>
+      </div>
+    </section>
+    </main>
+</body>
+</html>

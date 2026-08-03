@@ -1,82 +1,75 @@
 import os
 import torch
 import platform
+from pathlib import Path
 from test import test
 from train import train
 from eval import evaluate
 
-MAC_CONFIG = {
-    "epochs": 150,
-    "training_results_path": "/Users/christianrafferty/pneumonia_recognition/results/train_results",
-    "model_path": "/Users/christianrafferty/pneumonia_recognition/models/pneumonia_model.pth",
-    "training_data_path": "/Users/christianrafferty/pneumonia_recognition/data/train",
-    "plot": True,
-    "evaluation_data_path": "/Users/christianrafferty/pneumonia_recognition/data/val",
-    "evaluation_save_path": "/Users/christianrafferty/pneumonia_recognition/results/evaluation_results",
-    "test_save_path": "/Users/christianrafferty/pneumonia_recognition/results/test_results",
-    "test_data_dir": "/Users/christianrafferty/pneumonia_recognition/data/test"
-}
+BASE_DIR = Path(__file__).resolve().parents[1]
 
-WINDOWS_CONFIG = {
+COMMON_CONFIG = {
     "epochs": 150,
-    "training_results_path": r"C:\Users\Owner\pneumonia_recognition\results\train_results",
-    "model_path": r"C:\Users\Owner\pneumonia_recognition\models",
-    "training_data_path": r"C:\Users\Owner\pneumonia_recognition\data\train",
+    "training_results_path": BASE_DIR / "results" / "train_results",
+    "model_path": BASE_DIR / "models",
+    "training_data_path": BASE_DIR / "data" / "train",
     "plot": True,
-    "evaluation_data_path": r"C:\Users\Owner\pneumonia_recognition\data\val",
-    "evaluation_save_path": r"C:\Users\Owner\pneumonia_recognition\results\eval_results",
-    "test_save_path": r"C:\Users\Owner\pneumonia_recognition\results\test_results",
-    "test_data_dir": r"C:\Users\Owner\pneumonia_recognition\data\test"
+    "evaluation_data_path": BASE_DIR / "data" / "val",
+    "evaluation_save_path": BASE_DIR / "results" / "evaluation_results",
+    "test_save_path": BASE_DIR / "results" / "test_results",
+    "test_data_dir": BASE_DIR / "data" / "test",
 }
 
 def pipeline(config):
-
-    os.system('cls')
+    clear_cmd = "cls" if os.name == "nt" else "clear"
+    os.system(clear_cmd)
 
     print("\n\n === Beginning === \n\n")
-    
     print("\n == Checking system == \n")
 
-    if platform.system() == "Darwin":
-        if not torch.mps.is_available() == False:
-           raise Exception("GPU not availiable")
-    elif torch.cuda.is_available() == False:
-        raise Exception("GPU not availiable")
-
-    print("\nGPU available continuing\n")
+    if platform.system() == "Darwin" and torch.backends.mps.is_available():
+        print("Using MPS device")
+    elif torch.cuda.is_available():
+        print("Using CUDA device")
+    else:
+        print("Using CPU device")
 
     print("\n == Beginning Training == \n")
 
-    train(epochs = config["epochs"],
-          save_file_path = config["training_results_path"],
-          model_path = config["model_path"],
-          data_dir = config["training_data_path"],
-          plot = config["plot"])
+    train(
+        epochs=config["epochs"],
+        save_file_path=config["training_results_path"],
+        model_path=config["model_path"],
+        data_dir=config["training_data_path"],
+        plot=config["plot"],
+    )
     
     print("\n == Beginning Eval == \n")
 
-    evaluate(save_file_path=config["evaluation_save_path"], 
-             model_path=config["model_path"], 
-             data_dir=config["evaluation_data_path"],)
+    evaluate(
+        save_file_path=config["evaluation_save_path"],
+        model_path=config["model_path"],
+        data_dir=config["evaluation_data_path"],
+    )
     
     print("\n == Beginning Testing == \n")
 
-    test(save_file_path=config["test_save_path"], 
-         model_path=config["model_path"],
-         data_dir=config["test_data_dir"])
+    test(
+        save_file_path=config["test_save_path"],
+        model_path=config["model_path"],
+        data_dir=config["test_data_dir"],
+    )
     
     print("\n == Finished == ")
 
 def runTest(config):
     print("\n == Beginning Testing == \n")
 
-    test(save_file_path=config["test_save_path"], 
-         model_path=config["model_path"],
-         data_dir=config["test_data_dir"])
+    test(
+        save_file_path=config["test_save_path"],
+        model_path=config["model_path"],
+        data_dir=config["test_data_dir"],
+    )
 
-    
 if __name__ == "__main__":
-    if platform.system() == "Darwin":
-        pipeline(MAC_CONFIG)
-    else:
-        pipeline(WINDOWS_CONFIG)
+    pipeline(COMMON_CONFIG)

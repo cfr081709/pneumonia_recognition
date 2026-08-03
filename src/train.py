@@ -3,6 +3,7 @@ import time
 import torch
 import platform
 import pandas as pd
+from pathlib import Path
 from torch import nn
 import matplotlib.pyplot as plt
 from torch.utils.data import DataLoader
@@ -34,7 +35,7 @@ def get_class_weights(dataset, device):
     return weights.to(device)
 
 
-def train(epochs, save_file_path, model_path, data_dir, plot=False):
+def train(epochs, save_file_path, model_path, data_dir, plot=False, checkpoint_freq=10):
 
     threshold = 0.3
 
@@ -110,8 +111,18 @@ def train(epochs, save_file_path, model_path, data_dir, plot=False):
     true_neg_over = []
     false_neg_over = []
 
-    os.makedirs(save_file_path, exist_ok=True)
-    os.makedirs(os.path.dirname(model_path), exist_ok=True)
+    save_file_path = Path(save_file_path)
+    model_path = Path(model_path)
+    save_file_path.mkdir(parents=True, exist_ok=True)
+    model_path.mkdir(parents=True, exist_ok=True)
+    best_auc_dir = model_path / "best_auc"
+    best_auc_dir.mkdir(parents=True, exist_ok=True)
+    checkpoints_dir = model_path / "checkpoints"
+    checkpoints_dir.mkdir(parents=True, exist_ok=True)
+    # timestamp for checkpoint filenames (same for this training run)
+    timestamp = time.strftime("%Y%m%d_%H%M%S")
+    # track best validation score (higher is better)
+    best_score = float("-inf")
 
     for epoch in range(epochs):
 
@@ -144,7 +155,7 @@ def train(epochs, save_file_path, model_path, data_dir, plot=False):
             total_loss += loss.item()
 
             probs = torch.softmax(outputs, dim=1)
-            preds = (probs[:, 1] >= threshold).long
+            preds = (probs[:, 1] >= threshold).long()
 
             predArray.extend(preds.detach().cpu().numpy())
             actualArray.extend(labels.detach().cpu().numpy())
@@ -198,7 +209,32 @@ def train(epochs, save_file_path, model_path, data_dir, plot=False):
             """)
 
         df = pd.DataFrame(results)
-        df.to_csv(os.path.join(save_file_path, "train_results.csv"), index=False)
+        df.to_csv(save_file_path / "train_results.csv", index=False)
+
+        # Save per-epoch checkpoint (weights + metrics) only every `checkpoint_freq` epochs
+        epoch_metrics = results[-1]
+        if checkpoint_freq is None or checkpoint_freq <= 0 or ((epoch + 1) % int(checkpoint_freq) == 0):
+            ck_csv = checkpoints_dir / f"epoch_{epoch+1}_{timestamp}.csv"
+            pd.DataFrame([epoch_metrics]).to_csv(ck_csv, index=False)
+
+            ck_pth = checkpoints_dir / f"epoch_{epoch+1}_{timestamp}.pth"
+            torch.save(model.state_dict(), ck_pth)
+
+        # Update best model when epoch score improves
+        epoch_score = epoch_metrics.get("Score", None)
+        if epoch_score is not None and epoch_score > best_score:
+            best_score = epoch_score
+            # save best model copy and summary metrics
+            torch.save(model.state_dict(), best_auc_dir / "model.pth")
+            pd.DataFrame([{
+                "Epoch": epoch + 1,
+                "Score": epoch_score,
+                "Accuracy": epoch_metrics.get("Accuracy"),
+                "Precision": epoch_metrics.get("Precision"),
+                "Recall": epoch_metrics.get("Recall"),
+                "F1": epoch_metrics.get("F1"),
+                "ROC-AUC": epoch_metrics.get("ROC-AUC"),
+            }]).to_csv(best_auc_dir / "best_metrics.csv", index=False)
 
     if plot:
         

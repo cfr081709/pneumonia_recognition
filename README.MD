@@ -49,6 +49,9 @@ Sourced from [Kaggle](https://www.kaggle.com/datasets/paultimothymooney/chest-xr
 ```bash
 git clone https://github.com/cfr081709/pneumonia-recognition.git
 cd pneumonia-recognition
+python3 -m venv venv
+. venv/bin/activate
+pip install --upgrade pip setuptools wheel
 pip install -r requirements.txt
 ```
 
@@ -104,6 +107,7 @@ models/best_auc/threshold_metrics.csv
 ## Testing
 
 ```bash
+. venv/bin/activate
 python src/test.py
 ```
 
@@ -128,6 +132,7 @@ results/test_results/test_results.csv
 ## Full Pipeline
 
 ```bash
+. venv/bin/activate
 python src/main.py
 ```
 
@@ -164,3 +169,4 @@ pneumonia_recognition/
 - Pandas
 - Matplotlib
 - Scikit-learn
+- Flask-like frontend server via Node HTTP wrapper

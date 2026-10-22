@@ -55,6 +55,35 @@ pip install --upgrade pip setuptools wheel
 pip install -r requirements.txt
 ```
 
+The web demo also requires Node.js and npm. From the repository root, install its Node dependencies:
+
+```bash
+npm install
+```
+
+## Web App (Frontend and Backend)
+
+The frontend and prediction backend are served together by the Node.js server; there is no separate frontend development server to start. The backend launches the Python model script when an image is submitted.
+
+Start it from the repository root in a terminal:
+
+```bash
+. venv/bin/activate
+npm start
+```
+
+Then open [http://localhost:3000](http://localhost:3000) in a browser, select a chest X-ray image, and submit it. Leave the terminal running while using the app; press `Ctrl+C` there to stop the server. To use a different port, set `PORT` before starting, for example `PORT=3001 npm start`, and visit that port instead.
+
+The server defaults to the Python interpreter at `venv/bin/python` when that file exists, otherwise it runs `python` from `PATH`. If the fallback command does not point to the environment with the project requirements installed, set `PYTHON_CMD` to that environment's Python executable before starting the server. For example:
+
+```bash
+PYTHON_CMD=/path/to/venv/bin/python npm start
+```
+
+Predictions use `models/best_auc/model.pth` by default. If that checkpoint is missing, train a model first or set `MODEL_PATH` to a compatible checkpoint file or model directory. The first prediction can take longer while Python and the model load. The `/predict` endpoint accepts JSON containing an `image_base64` field and returns the predicted label and confidence; the browser app calls this endpoint automatically.
+
+This is a local research/demo application, not a medical device. Do not use its output for diagnosis or treatment decisions, and do not expose the server to the public internet: the upload endpoint has no authentication or upload-size limit.
+
 ## Training
 
 ```bash
@@ -169,4 +198,4 @@ pneumonia_recognition/
 - Pandas
 - Matplotlib
 - Scikit-learn
-- Flask-like frontend server via Node HTTP wrapper
+- Node.js HTTP server for the web demo

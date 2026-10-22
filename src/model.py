@@ -8,7 +8,6 @@ from torch import nn
 import torchvision.transforms as transforms
 from torchvision.models import densenet201
 
-
 def get_device():
     if platform.system() == "Darwin" and torch.backends.mps.is_available():
         return torch.device("mps")
